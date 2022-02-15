@@ -1,3 +1,3 @@
 # UIMotionX
 
-A description of this package.
+UIMotionX is an iOS UI Library related to the motion.
