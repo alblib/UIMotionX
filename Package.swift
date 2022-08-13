@@ -6,7 +6,8 @@ import PackageDescription
 let package = Package(
     name: "UIMotionX",
     platforms: [
-        .macOS(.v11), .macCatalyst(.v14), .iOS(.v14), .watchOS(.v7), .tvOS(.v14)
+        .macOS(.v10_15), .macCatalyst(.v13), .iOS(.v11), .watchOS(.v5), .tvOS(.v9)
+        // all for 64-bit only OSs. iOS 11 (2017), watchOS 5 (2018), macOS 10.15 & mac Catalyst (13, first version) (2019)
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
