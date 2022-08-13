@@ -40,9 +40,14 @@ import AppKit
  */
 
 
-protocol PersonalTimelineProtocol{
-    public(get) var path:[CLLocation]
-}
+
+#if os(watchOS) || os(tvOS)
+/**
+ fdf
+ */
+@available(*, unavailable)
+internal class LooseLocationTracker{}
+#else
 
 /**
  fds
@@ -52,13 +57,28 @@ protocol PersonalTimelineProtocol{
  * Location Permission in info.plist
  * CLAuthorizationStatus=always
  */
+@available(iOS 8, macOS 10.15, macCatalyst 13.1, *)
+@available(watchOS, unavailable)
+@available(tvOS, unavailable)
 internal class LooseLocationTracker: NSObject, CLLocationManagerDelegate{
+    //@available(iOS 4.2, macOS 10.7, macCatalyst 13.1, *) // availability of significantLocationChanges
+    //@available(iOS 6, macOS 10.9, macCatalyst 13.1, tvOS 9, watchOS 2, *) //locationManager(_:didUpdateLocations:) availability
+    
+    
     // PersonalTimelineRecorder
     private let locationManager = CLLocationManager()
     
-    //var pathNavigation: Bool
-    
-    
+    var suppressCLAuthorizationWarning: Bool = false{
+        didSet{
+            if suppressCLAuthorizationWarning == false{
+                if #available(iOS 14, macOS 11, macCatalyst 14, *){
+                    locationManagerDidChangeAuthorization(locationManager)
+                }else{
+                    locationManager(locationManager, didChangeAuthorization: CLLocationManager.authorizationStatus())
+                }
+            }
+        }
+    }
     override init(){
         super.init()
         // MARK: Default Settings
@@ -77,50 +97,51 @@ internal class LooseLocationTracker: NSObject, CLLocationManagerDelegate{
         if #available(iOS 8, macOS 10.15, macCatalyst 13.1, watchOS 2, *){
             locationManager.requestAlwaysAuthorization()
         } // result is dealt in locationManagerDidChangeAuthorization
-        locationManager.startMonitoringSignificantLocationChanges()
+        if CLLocationManager.significantLocationChangeMonitoringAvailable(){
+            locationManager.startMonitoringSignificantLocationChanges()
+        }
     }
     
     // MARK: Responding to Authorization Changes (and also init)
-    @available(iOS 14, macOS 11, macCatalyst 14, tvOS 14, watchOS 7, *)
+    @available(iOS 14, macOS 11, macCatalyst 14, tvOS 14, *)// watchOS 7, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager){
         locationManager(manager, didChangeAuthorization: manager.authorizationStatus)
     }
     
     /** Alerts users to authorise the location service if user has denied the authorisation. */
-    @available(iOS 4.2, macOS 10.7, macCatalyst 13.1, tvOS 9.0, watchOS 2.0, *)
+    //@available(iOS 4.2, macOS 10.7, macCatalyst 13.1, tvOS 9.0, watchOS 2.0, *)
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus){
+        guard suppressCLAuthorizationWarning == false else{ return }
         // Purpose of this method: alert user to change authorization.
-        var message: String
+        let alertTitle: String = "Allow Location Access"
+        var alertMessage: String
         switch status{
         case .restricted:
-            message = "This device restricts location services. Personal timeline recording has been disabled."
+            alertMessage = "This device restricts location services. Personal timeline recording has been disabled."
         case .denied:
-            message = "You have denied to allow location access of this app, which disables personal timeline recording."
+            alertMessage = "You have denied to allow location access of this app, which disables personal timeline recording."
         case .authorizedWhenInUse:
-            message = "You only authorized to use location when this app is running. Please allow location access 'Always' to use background personal timeline recording."
+            alertMessage = "You only authorized to use location when this app is running. Please allow location access 'Always' to use background personal timeline recording."
         default:
-            break
+            return // even if 'undetermined', ask later when the authorization is explicitly called.
         }
         
         // Generating an alert object
-        #if os(watchOS)
-        if #available(watchOS 2, *){
-            let alert = WKAlertAction
-        }
-            
-        #elseif canImport(UIKit)
-            if #available(iOS 8, macCatalyst 13.1, tvOS 9, *){
-                let alert = UIAlertController(title: "Allow Location Access", message: message, preferredStyle: .alert)
-                let dismissButton = UIAlertAction(title: "Dismiss", style: .default)
-                let settingButton = UIAlertAction(title: "Settings", style: .default, handler: {(action) in
-                    if let url = URL(string: UIApplication.openSettingsURLString){
-                        //await
-                        UIApplication.shared.open(url)
-                    }
-                }
-                )
+        #if canImport(UIKit) // #available(iOS 8, macCatalyst 13.1, tvOS 9, *)
+        let alert = UIAlertController(title: alertTitle, message: alertMessage, preferredStyle: .alert)
+        let dismissButton = UIAlertAction(title: "Dismiss", style: .default)
+        let settingButton = UIAlertAction(title: "Settings", style: .default, handler: {_ in
+            if let url = URL(string: UIApplication.openSettingsURLString){
+                UIApplication.shared.open(url)
             }
+        })
+        alert.addAction(settingButton)
+        alert.addAction(dismissButton)
+        //alert.preferredAction = dismissButton
+        UIApplication.shared.windows.first?.rootViewController?.present(alert, animated: true)
+            
         #else
+        
         #endif
             
     }
@@ -131,25 +152,23 @@ internal class LooseLocationTracker: NSObject, CLLocationManagerDelegate{
         // Purpose of this method: Killing all errors. (Don't pass any exceptions)
         // Notifying the user to change the authorization is done in locationManagerDidChangeAuthorization.
         if (error as? CLError)?.code == CLError.Code.denied{
-            locationManager.stopMonitoringSignificantLocationChanges()
+            //locationManager.stopMonitoringSignificantLocationChanges()
         }
     }
     
     // MARK: Responding to Location Events
     /** Tells the delegate that new location data is available. */
-    @available(iOS 6, macOS 10.9, macCatalyst 13.1, tvOS 9, watchOS 2, *)
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]){
+        //@available(iOS 6, macOS 10.9, macCatalyst 13.1, tvOS 9, watchOS 2, *)
+        // before then, used func locationManager(_ manager: CLLocationManager, didUpdateTo newLocation: CLLocation, from oldLocation: CLLocation)
+        
+        
         
     }
     
-    // Obsolete: see locationManager(_:didUpdateLocations:)
-    func locationManager(_ manager: CLLocationManager, didUpdateTo newLocation: CLLocation,
-                         from oldLocation: CLLocation)
-    {
-        locationManager(manager, didUpdateLocations: [newLocation])
-    }
-
 }
+
+#endif
 
 /*
 
